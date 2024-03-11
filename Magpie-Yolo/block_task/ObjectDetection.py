@@ -6,6 +6,13 @@ import cv2
 import open3d as o3d
 import Block as bl
 import spatialmath as sm
+import matplotlib.pyplot as plt
+from magpie.perception import pcd
+from open3d.web_visualizer import draw
+from magpie import realsense_wrapper as real
+from magpie.perception.label_owlvit import LabelOWLViT
+from magpie.perception.mask_sam import MaskSAM
+
 class ObjectDetection():
     # This class creates a RealSense Object, takes images and returns Open3D point clouds corresponding to blocks
     # Extrinsics of RealSense Object are no longer used here so interfacing with the Realsense could be done outside this class for decoupling
@@ -14,7 +21,13 @@ class ObjectDetection():
         # :RealSense - RealSense object
         # :moveRelative boolean - True if the gripper moves to block positions in the camera frame, false if moving to world frame positions (via rtb_model)
         # robot_model is object of type RTB_Model
+
+        self.rsc = RealSense
         self.real = RealSense
+        path = "google/owlvit-base-patch32"
+        self.label_vit = LabelOWLViT(path)
+        ckpt = "/home/streck/work/owlvit_segment_anything/sam_vit_h_4b8939.pth"
+        self.mask_sam = MaskSAM(ckpt)
         '''
         # self.real.initConnection()
         if moveRelative:
@@ -34,7 +47,7 @@ class ObjectDetection():
         # Load the model into memory
         # Trained on yolov8l-seg for 200 epochs
         # yolo models compared https://docs.ultralytics.com/tasks/segment/
-        self.model = YOLO('yolov8l-seg.pt')
+        #self.model = YOLO('yolov8l-seg.pt')
 
     def getSegmentationMask(self, result, className):
         # :result ultralytics.result
@@ -50,8 +63,35 @@ class ObjectDetection():
                 scaledMask = cv2.resize(mask, (result.orig_shape[1], result.orig_shape[0]))
                 return scaledMask
         return None
+    def getVitLables(self, colorImage):
+        image = cv2.convertScaleAbs(image, alpha=2.5, beta=-100) # 2.5 and -100 were the best 
+        queries = ["a photo of a red cube", "a photo of a yellow cube", "a photo of a blue cube"]
 
-    def getBlocksFromImages(self, colorImage, depthImage, urPose, display=False):
+        abbrevq = ["redBlock", "yellowBlock", "blueBlock"]
+        self.label_vit.set_threshold(0.03)
+        bboxes, uboxes = self.label_vit.label(image, queries, abbrevq, plot=True)
+
+        index = 1
+        # this does the [x, y, z] --> [y, -x, z] grasp pose switch, and the -y inversio on the y-axis orientation
+        # rgbd_image, cpcd, tmat = pcd.get_segment(label_vit.boxes, index, rgbd_image, rsc, type="box", display=False)
+        rgbd_image, cpcd, tmat = pcd.get_segment(self.label_vit.boxes, 
+                                                index, 
+                                                rgbd_image, 
+                                                self.rsc, 
+                                                type="box-dbscan", 
+                                                #  type="box", 
+                                                #  method="quat", 
+                                                method="iterative", 
+                                                display=True)
+        tmat, tmat[:3, 3]
+        self.mask_sam.set_image_and_labels(np.array(rgbd_image.color), np.array([np.array(i[0]) for i in self.label_vit.boxes]), self.label_vit.labels)
+        return self.label_vit
+
+    def getIndex(lables,name):
+        for i in range(0, len(lables)):
+            if lables[i] == name:
+                return i
+    def getBlocksFromImages(self,colorImage, depthImage, urPose, display=False):
         # :colorImage 3-channel rgb image as numpy array
         # :depthImage 1-channel of measurements in z-axis as numpy array
         # :display boolean that toggles whether masks should be shown with color image
@@ -61,12 +101,13 @@ class ObjectDetection():
 
         # Detects and segments classes using trained yolov8l-seg model
         # Inference step, only return instances with confidence > 0.6
-        pilImage = Image.fromarray(np.array(colorImage))
-        result = self.model.predict(pilImage, conf=0.6, save=True)[0]
+        rsc =self.rsc
+        label_vit = self.getVitLables(colorImage)
+        masks = self.mask_sam.get_masks(label_vit.labels)
 
-        redMask = self.getSegmentationMask(result, 'Red')
-        yellowMask = self.getSegmentationMask(result, 'Yellow')
-        blueMask = self.getSegmentationMask(result, 'Blue')
+        redMask = masks[self.getIndex(label_vit.labels,"redBlock")]
+        yellowMask = masks[self.getIndex(label_vit.labels,"yellowBlock")]
+        blueMask = masks[self.getIndex(label_vit.labels,"blueBlock")]
 
         '''
         if display:
@@ -94,57 +135,58 @@ class ObjectDetection():
 
             print("Masks")
             fig, ax = plt.subplots(3, 1)
-            ax[0].imshow(redMask * 255, cmap='gray')
+            ax[0].imshow(redMask[0] * 255, cmap='gray')
             ax[0].set_title("Red Mask")
-            ax[1].imshow(yellowMask * 255, cmap='gray')
+            ax[1].imshow(yellowMask[0] * 255, cmap='gray')
             ax[1].set_title("Yellow Mask")
-            ax[2].imshow(blueMask * 255, cmap='gray')
+            ax[2].imshow(blueMask[0] * 255, cmap='gray')
             ax[2].set_title("Blue Mask")
             plt.show()
 
-        redDepthImage = np.multiply(depthImage, redMask.astype(int)).astype('float32')
-        yellowDepthImage = np.multiply(depthImage, yellowMask.astype(int)).astype('float32')
-        blueDepthImage = np.multiply(depthImage, blueMask.astype(int)).astype('float32')
+        redDepthImage = np.multiply(depthImage, np.array(redMask).astype(int)).astype('float32')
+        yellowDepthImage = np.multiply(depthImage, np.array(yellowMask).astype(int)).astype('float32')
+        blueDepthImage = np.multiply(depthImage, np.array(blueMask).astype(int)).astype('float32')
+
+        print(redDepthImage)
 
         # SEGMENT PCD INTO RED,YELLOW,BLUE BLOCKS
-        depthScale = self.real.depthScale
+        depthScale = rsc.depthScale
 
         # Create Segmented RGBD Images for Each Color
         redRGDB_Image = o3d.geometry.RGBDImage.create_from_color_and_depth(
             o3d.geometry.Image(colorImage),
-            o3d.geometry.Image(redDepthImage),
+            o3d.geometry.Image(redDepthImage[0]),
             convert_rgb_to_intensity=False,
             depth_scale=1
         )
 
         yellowRGDB_Image = o3d.geometry.RGBDImage.create_from_color_and_depth(
             o3d.geometry.Image(colorImage),
-            o3d.geometry.Image(yellowDepthImage),
+            o3d.geometry.Image(yellowDepthImage[0]),
             convert_rgb_to_intensity=False,
             depth_scale=1
         )
 
         blueRGBD_Image = o3d.geometry.RGBDImage.create_from_color_and_depth(
             o3d.geometry.Image(colorImage),
-            o3d.geometry.Image(blueDepthImage),
+            o3d.geometry.Image(blueDepthImage[0]),
             convert_rgb_to_intensity=False,
             depth_scale=1
         )
-
         # Create Point Clouds for Each Class
         redPCD = o3d.geometry.PointCloud.create_from_rgbd_image(
             redRGDB_Image,
-            self.real.pinholeInstrinsics,
+            rsc.pinholeInstrinsics,
             project_valid_depth_only=True
         )
         yellowPCD = o3d.geometry.PointCloud.create_from_rgbd_image(
             yellowRGDB_Image,
-            self.real.pinholeInstrinsics,
+            rsc.pinholeInstrinsics,
             project_valid_depth_only=True
         )
         bluePCD = o3d.geometry.PointCloud.create_from_rgbd_image(
             blueRGBD_Image,
-            self.real.pinholeInstrinsics,
+            rsc.pinholeInstrinsics,
             project_valid_depth_only=True
         )
         '''
