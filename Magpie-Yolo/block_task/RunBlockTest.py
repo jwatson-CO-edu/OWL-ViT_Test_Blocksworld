@@ -2,7 +2,8 @@ import rtde_control
 import rtde_receive
 from Motor_Code import Motors
 import UR5_Interface as ur
-import RealSense as real
+#import RealSense as real
+from magpie import realsense_wrapper as real
 import ObjectDetection as ob
 import TaskPlanner as tp
 import Block as bl
@@ -34,14 +35,16 @@ try:
         print("UR5 + Gripper Interface Established")
     real = real.RealSense()
     real.initConnection()
+    #to modify
     try:
-        detector = ob.ObjectDetection(real,None,moveRelative = True)
+        detector = ob.ObjectDetection(real,None,moveRelative = True) # file may not exist in the future.
     except Exception as e:
         detector.real.pipe.stop()
         raise(e)
     urPose = ur.getPose()
     pcd,rgbdImage = detector.real.getPCD()
     depthImage,colorImage = rgbdImage.depth,rgbdImage.color
+    
     blocks = detector.getBlocksFromImages(colorImage,depthImage,urPose,display = True)
     
     planner = tp.TaskPlanner(blocks)
