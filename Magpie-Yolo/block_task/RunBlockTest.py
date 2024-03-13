@@ -3,6 +3,8 @@ import rtde_receive
 from Motor_Code import Motors
 import UR5_Interface as ur
 #import RealSense as real
+import sys
+sys.path.append('../')
 from magpie import realsense_wrapper as real
 import ObjectDetection as ob
 import TaskPlanner as tp
@@ -43,9 +45,9 @@ try:
         raise(e)
     urPose = ur.getPose()
     pcd,rgbdImage = detector.real.getPCD()
-    depthImage,colorImage = rgbdImage.depth,rgbdImage.color
     
-    blocks = detector.getBlocksFromImages(colorImage,depthImage,urPose,display = True)
+    
+    blocks = detector.getBlocksFromImages(rgbdImage,urPose,display = True)
     
     planner = tp.TaskPlanner(blocks)
     goalDict = {"on":[("blueBlock","yellowBlock")]}

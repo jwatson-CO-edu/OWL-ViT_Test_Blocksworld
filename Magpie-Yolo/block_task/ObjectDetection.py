@@ -1,4 +1,6 @@
 from ultralytics import YOLO
+import sys 
+sys.path.append('../')
 from PIL import Image
 import numpy as np
 import matplotlib.pyplot as plt
@@ -9,6 +11,7 @@ import spatialmath as sm
 import matplotlib.pyplot as plt
 from magpie.perception import pcd
 from open3d.web_visualizer import draw
+
 from magpie import realsense_wrapper as real
 from magpie.perception.label_owlvit import LabelOWLViT
 from magpie.perception.mask_sam import MaskSAM
@@ -63,7 +66,8 @@ class ObjectDetection():
                 scaledMask = cv2.resize(mask, (result.orig_shape[1], result.orig_shape[0]))
                 return scaledMask
         return None
-    def getVitLables(self, colorImage):
+    def getVitLables(self, rgbd_image):
+        image = np.array(rgbd_image.color)
         image = cv2.convertScaleAbs(image, alpha=2.5, beta=-100) # 2.5 and -100 were the best 
         queries = ["a photo of a red cube", "a photo of a yellow cube", "a photo of a blue cube"]
 
@@ -87,11 +91,11 @@ class ObjectDetection():
         self.mask_sam.set_image_and_labels(np.array(rgbd_image.color), np.array([np.array(i[0]) for i in self.label_vit.boxes]), self.label_vit.labels)
         return self.label_vit
 
-    def getIndex(lables,name):
+    def getIndex(self,lables,name):
         for i in range(0, len(lables)):
             if lables[i] == name:
                 return i
-    def getBlocksFromImages(self,colorImage, depthImage, urPose, display=False):
+    def getBlocksFromImages(self,rgbd_image, urPose, display=False):
         # :colorImage 3-channel rgb image as numpy array
         # :depthImage 1-channel of measurements in z-axis as numpy array
         # :display boolean that toggles whether masks should be shown with color image
@@ -101,8 +105,10 @@ class ObjectDetection():
 
         # Detects and segments classes using trained yolov8l-seg model
         # Inference step, only return instances with confidence > 0.6
+        depthImage = rgbd_image.depth
+        colorImage = rgbd_image.color
         rsc =self.rsc
-        label_vit = self.getVitLables(colorImage)
+        label_vit = self.getVitLables(rgbd_image)
         masks = self.mask_sam.get_masks(label_vit.labels)
 
         redMask = masks[self.getIndex(label_vit.labels,"redBlock")]

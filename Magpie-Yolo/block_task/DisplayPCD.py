@@ -34,8 +34,7 @@ try:
         raise(e)
     urPose = ur.getPose()
     pcd,rgbdImage = detector.real.getPCD()
-    depthImage,colorImage = rgbdImage.depth,rgbdImage.color
-    blocks = detector.getBlocksFromImages(colorImage,depthImage,urPose,display = True)
+    blocks = detector.getBlocksFromImages(rgbdImage,urPose,display = True)
     
     planner = tp.TaskPlanner(blocks)
     goalDict = {"on":[("blueBlock","yellowBlock")]}
