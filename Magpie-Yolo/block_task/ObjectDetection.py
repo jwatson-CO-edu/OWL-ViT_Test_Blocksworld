@@ -68,11 +68,11 @@ class ObjectDetection():
         return None
     def getVitLables(self, rgbd_image):
         image = np.array(rgbd_image.color)
-        image = cv2.convertScaleAbs(image, alpha=2.5, beta=-100) # 2.5 and -100 were the best 
-        queries = ["a photo of a red cube", "a photo of a yellow cube", "a photo of a blue cube"]
-
+        #image = cv2.convertScaleAbs(image, alpha=2.1, beta=-50) # 2.5 and -100 were the best 
+        #queries = ["a photo of a red cube", "a photo of a yellow cube", "a photo of a blue cube"]
+        queries = ["a photo of a red cube", "a photo of a yellow square", "a photo of a blue square"]
         abbrevq = ["redBlock", "yellowBlock", "blueBlock"]
-        self.label_vit.set_threshold(0.03)
+        self.label_vit.set_threshold(0.035)
         bboxes, uboxes = self.label_vit.label(image, queries, abbrevq, plot=True)
 
         index = 1
