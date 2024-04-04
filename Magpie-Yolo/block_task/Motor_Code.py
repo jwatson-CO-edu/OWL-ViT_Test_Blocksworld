@@ -1,4 +1,5 @@
-from Ax12 import Ax12
+#from Ax12 import Ax12
+from block_task.Ax12 import Ax12
 import math
 class Motors:
    

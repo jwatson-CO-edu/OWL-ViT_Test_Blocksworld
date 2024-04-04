@@ -1,6 +1,7 @@
 import numpy as np
 import spatialmath as sm
-import poses as poses
+#import poses as poses
+import block_task.poses as poses
 import time
 class UR5_Interface():
     def __init__(self):
