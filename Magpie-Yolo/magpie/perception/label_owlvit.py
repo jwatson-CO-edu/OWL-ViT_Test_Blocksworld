@@ -106,7 +106,12 @@ class LabelOWLViT(Label):
         bboxes, uboxes = self.get_boxes(input_image, abbrev_labels, scores, boxes, labels)
         self.boxes = bboxes
         self.labels = np.array([i[1] for i in uboxes])
-        return bboxes, uboxes
+        filtered_scores = []
+        for score in scores:
+            if score>self.SCORE_THRESHOLD:
+                filtered_scores.append(score)
+        self.scores = filtered_scores
+        return bboxes, uboxes, filtered_scores
 
     def set_threshold(self, threshold):
         self.SCORE_THRESHOLD = threshold
