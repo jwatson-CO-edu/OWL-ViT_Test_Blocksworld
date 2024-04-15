@@ -43,7 +43,7 @@ class LabelOWLViT(Label):
             uboxes.append((box, text_queries[label]))
         return pboxes, uboxes
     
-    def plot_predictions(self, input_image, text_queries, scores, boxes, labels):
+    def plot_predictions(self, input_image, text_queries, scores, boxes, labels, i):
         fig, ax = plt.subplots(1, 1, figsize=(8, 8))
         ax.imshow(input_image, extent=(0, 1, 1, 0))
         ax.set_axis_off()
@@ -73,6 +73,10 @@ class LabelOWLViT(Label):
                     "boxstyle": "square,pad=.3"
                 })
             idx += 1
+        filename = str(text_queries[0]) + "_" + str(i) + ".png"
+        sys.path.append("/results")
+        fig.savefig(filename)
+        sys.path.append("../")
 
     def get_preds(self, outputs, target_sizes):
         logits = torch.max(outputs["logits"][0], dim=-1)
@@ -84,7 +88,7 @@ class LabelOWLViT(Label):
         pboxes = self.processor.post_process_object_detection(outputs=outputs, target_sizes=target_sizes, threshold=self.SCORE_THRESHOLD)[0]['boxes']
         return scores, labels, boxes, pboxes
 
-    def label(self, input_image, input_labels, abbrev_labels, plot=False):
+    def label(self, input_image, input_labels, abbrev_labels, i, plot=False):
         '''
         @param input_labels list of input labels
         @param input_image np.array image to label
@@ -102,7 +106,7 @@ class LabelOWLViT(Label):
         scores, labels, boxes, pboxes = self.get_preds(outputs, target_sizes)
         image_plt = img.astype(np.float32) / 255.0
         if plot:
-            self.plot_predictions(image_plt, abbrev_labels, scores, boxes, labels)
+            self.plot_predictions(image_plt, abbrev_labels, scores, boxes, labels,i)
         bboxes, uboxes = self.get_boxes(input_image, abbrev_labels, scores, boxes, labels)
         self.boxes = bboxes
         self.labels = np.array([i[1] for i in uboxes])
