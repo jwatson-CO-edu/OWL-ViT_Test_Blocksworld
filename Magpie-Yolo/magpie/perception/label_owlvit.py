@@ -26,8 +26,9 @@ class LabelOWLViT(Label):
     def get_boxes(self, input_image, text_queries, scores, boxes, labels):
         pboxes = []
         uboxes = []
+        max_score = max(scores)
         for score, box, label in zip(scores, boxes, labels):
-            if score < self.SCORE_THRESHOLD:
+            if score != max_score:
                 continue
             cx, cy, w, h = box
             x0 = (cx - w/2) * self.W
@@ -44,13 +45,16 @@ class LabelOWLViT(Label):
         return pboxes, uboxes
     
     def plot_predictions(self, input_image, text_queries, scores, boxes, labels, i):
+        sys.path.append("/results")
         fig, ax = plt.subplots(1, 1, figsize=(8, 8))
         ax.imshow(input_image, extent=(0, 1, 1, 0))
         ax.set_axis_off()
         
         idx = 0
+        max_score = max(scores)
         for score, box, label in zip(scores, boxes, labels):
-            if score < self.SCORE_THRESHOLD:
+            #if score < self.SCORE_THRESHOLD:
+            if score != max_score:
                 continue
             cx, cy, w, h = box
             x0 = (cx - w/2) * 1280
@@ -74,8 +78,9 @@ class LabelOWLViT(Label):
                 })
             idx += 1
         filename = str(text_queries[0]) + "_" + str(i) + ".png"
-        sys.path.append("/results")
+        
         fig.savefig(filename)
+        
         sys.path.append("../")
 
     def get_preds(self, outputs, target_sizes):
@@ -111,8 +116,9 @@ class LabelOWLViT(Label):
         self.boxes = bboxes
         self.labels = np.array([i[1] for i in uboxes])
         filtered_scores = []
+        max_score = max(scores)
         for score in scores:
-            if score>self.SCORE_THRESHOLD:
+            if score==max_score:
                 filtered_scores.append(score)
         self.scores = filtered_scores
         return bboxes, uboxes, filtered_scores
